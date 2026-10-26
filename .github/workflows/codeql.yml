@@ -1,0 +1,75 @@
+name: "CodeQL Analysis"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 18 * * 0'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3言語をマトリクスで並列実行
+        include:
+          - language: python
+          - language: c-cpp
+          - language: rust
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # --- 言語固有のツールチェーン・依存関係のセットアップ ---
+    # C++ のビルドに必要なツールをインストール（必要に応じて）
+    - name: Install C++ dependencies
+      if: matrix.language == 'c-cpp'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
+
+    # Rust ツールチェーンのセットアップ
+    - name: Install Rust toolchain
+      if: matrix.language == 'rust'
+      uses: dtolnay/rust-toolchain@stable
+
+    # --- CodeQL の初期化 ---
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended    # 拡張セキュリティクエリを指定
+
+    # --- ビルドステップ（コンパイル言語のみ） ---
+    # Python の場合は自動的にスキップされます
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    # ※ Autobuild で失敗する場合は、上記の Autobuild をコメントアウトし、
+    #  以下のように独自ビルドコマンドを指定します。
+    # - name: Manual Build for C++
+    #   if: matrix.language == 'c-cpp'
+    #   run: |
+    #     cmake -B build
+    #     cmake --build build
+    #
+    # - name: Manual Build for Rust
+    #   if: matrix.language == 'rust'
+    #   run: |
+    #     cargo build --release
+
+    # --- 解析の実行 ---
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{ matrix.language }}"
