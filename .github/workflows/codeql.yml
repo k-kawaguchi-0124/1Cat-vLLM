@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '0 18 * * 0'          # 毎週日曜日に自動スキャン
+    - cron: '0 18 * * 0'
 
 jobs:
   analyze:
@@ -20,36 +20,38 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - language: python
-            build-mode: none
-          # C++ は build-mode: none を指定してビルド依存エラーを回避
-          - language: c-cpp
-            build-mode: none
-          # Rust は Cargo による自動ビルドを使用
-          - language: rust
-            build-mode: autobuild
+        language: [ 'python', 'c-cpp', 'rust' ]
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Rust 解析用のツールチェーン準備
+    # Rust 用ツールチェーンの準備
     - name: Install Rust toolchain
       if: matrix.language == 'rust'
       uses: dtolnay/rust-toolchain@stable
 
-    # CodeQL の初期化（セキュリティ拡張クエリを指定）
-    - name: Initialize CodeQL
+    # --- CodeQL の初期化 ---
+    # Python と C++ はビルド不要モード (none) で初期化
+    - name: Initialize CodeQL (Python / C++)
+      if: matrix.language != 'rust'
       uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
-        build-mode: ${{ matrix.build-mode }}
+        build-mode: none
         queries: security-extended
 
-    # Rust のみ Autobuild を実行（Python と C++ はスキップ）
-    - name: Autobuild
-      if: matrix.build-mode == 'autobuild'
+    # Rust は build-mode を渡さずに初期化
+    - name: Initialize CodeQL (Rust)
+      if: matrix.language == 'rust'
+      uses: github/codeql-action/init@v3
+      with:
+        languages: rust
+        queries: security-extended
+
+    # Rust のみ Autobuild を実行（Python / C++ は不要）
+    - name: Autobuild (Rust)
+      if: matrix.language == 'rust'
       uses: github/codeql-action/autobuild@v3
 
     # 解析の実行
